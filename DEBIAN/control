@@ -1,0 +1,31 @@
+Package: image-rename
+Version: 1.5-3
+Architecture: all
+Maintainer: Careone <emacslocale@126.com>
+Installed-Size: 156
+Depends:
+Suggests: libimage-exiftool-perl,purrr
+Recommends: imagemagick
+Conflicts:
+Replaces:
+Section: utils
+Priority: optional
+Homepage: https://sourceforge.net/projects/emacslocale/files/image-rename/
+Description: image-rename is a command line tool to rename JPG/RAW/TIF image and other files, and more useful features.
+ now support:
+ .
+ * rename files by add/remove/replace special suffix, prefix and date;
+ * probe JPG/RAW/TIF image files for camera bands;
+ * remove EXIF metedata for JPG/RAW/TIF images, and save to new files;
+ *
+ .
+ test for:
+ * Ubuntu 10.04 i386;
+ * GNU bash, version 4.1.5;
+ * GNU sed version 4.2.1;
+ .
+ and
+ .
+ * Debian 7.4 i386;
+ * GNU bash, version 4.2.7;
+ * GNU sed version 4.2.1;
