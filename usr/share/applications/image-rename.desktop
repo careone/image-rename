@@ -1,0 +1,14 @@
+#!/usr/bin/env xdg-open
+
+[Desktop Entry]
+Name=ImageRename
+Name[zh_CN]=图像更名器(ImageRename)
+Comment=rename image filenames by date and special string
+Comment[zh_CN]=按日期和指定文字来重命名图像的文件名
+Exec=image-rename --readme
+Icon=image-rename
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+StartupNotify=false
+Categories=Graphics;GNOME;GTK;
