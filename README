@@ -1,0 +1,58 @@
+Usage: image-rename [OPTION]
+
+image-rename is a command line tool to rename JPG/RAW/TIF image and other 
+files, by add/remove/replace special suffix, prefix and date. it also can 
+remove EXIF metedata for JPG/RAW/TIF images, and more useful features
+
+  -b | --band FILES
+    probe camera band by JPG image filename format.
+    if no FILES given, print JPG image filename define infomations for
+    different bands of camera
+
+  -j | --jpg FILES
+    rename files by adding suffix JPG, except for *.JPG and *.JPEG files
+
+  -s | --suffix SUFFIX FILES
+    rename files by add or replace suffix to special
+
+  -ss | --short-suffix SUFFIX FILES
+    rename files by replace suffix to special
+    NOTICE: example for differences between option -s and -ss:
+      -s JPG 001.THM
+         output: 001.THM -> 001.THM.JPG
+      -ss JPG 001.THM
+         output: 001.THM -> 001.JPG
+
+  -d | --date FILES
+    rename files by adding date prefix (by file modify time stamp), in 
+    format YYYY-MM-DD_FILENAME
+  -p | --prefix PREFIX FILES
+    rename files by adding special PREFIX, in format PrefixAPP
+  -pd | --prefix-date PREFIX FILES
+    rename files by adding special PREFIX and file update/modify date, in 
+    format PrefixDate_FILENAME
+
+  -rd | --remove-date FILES
+    removing date strings in filenames, which in format YYYY-MM-DD_
+
+  -rmp | --remove-prefix PREFIX FILES
+    remove special prefix in filenames
+
+  -rpp | --replace-prefix ORIG_PREFIX NEW_PREFIX FILES
+    replace special prefix in filenames
+
+  --rmexif FILES
+    remove EXIF metedata for JPG/RAW/TIFF images, by call command
+    'convert' from imagemagick 
+
+  -x | --extra     show extra options 
+  --readme         show README file 
+  -v, --version    print the version information and exit
+  -h, --help       print this message and exit
+
+Homepage:
+https://sourceforge.net/projects/emacslocale/files/image-rename/
+
+GitHub: https://github.com/careone/image-rename
+
+Please report bugs to Careone <emacslocale@126.com>.
