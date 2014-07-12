@@ -1,0 +1,2027 @@
+#! /bin/bash
+
+### coding: utf-8
+### name: image-rename
+### 2014-07-12 updated
+### author: Careone <emacslocale@126.com>
+
+### ------------------
+VERSION="1.6"
+APP="image-rename"
+prefix="/usr/local/share"
+APPDIR="$prefix/$APP"
+
+DEBUG=0
+## 1: show debug info (for develop and debug only); 0: not show
+
+## probe current LANG is zh_CN or others, to auto select information
+## language
+CLANG=`echo "$LANG" | cut -d'.' -f1`
+	#auto select message language by current LANG
+	case "$CLANG" in
+	  zh_CN* | zh_SG)x=1	#output message in Simplified Chinese
+		CLANG=zh_CN ;;
+	  zh_TW* | zh_HK | zh_*)x=2	#output message in Traditional Chinese
+		CLANG=zh_TW ;;
+	  *)x=0		#others: in English
+		;;
+	esac
+
+## message defines 
+# now support English, Chinese Simplified, Chinese Traditional
+declare -a MSG_FILES
+declare -a MSG_USAGE
+declare -a MSG_ERROR
+declare -a MSG_RENAME
+declare -a MSG_SKIP
+declare -a MSG_IGNORE
+declare -a MSG_SAVEAS
+
+declare -a MSG_OK
+declare -a MSG_FAIL
+declare -a MSG_PREFIX
+
+# for errors
+declare -a MSG_ERR001 MSG_ERR002 MSG_ERR003
+declare -a MSG_ERR004 MSG_ERR005 MSG_ERR006 MSG_ERR007 MSG_ERR008
+declare -a MSG_ERR009 MSG_ERR010 MSG_ERR011
+
+# for option --band
+declare -a MSG_BAND001 MSG_CAMERA MSG_FORMAT
+
+# for option --suffix
+declare -a MSG_SUF001
+
+# for option --remove-date
+declare -a MSG_RD001 MSG_RD002 MSG_RD003
+
+# for option --remove-prefix
+declare -a MSG_REM001
+
+
+declare -a MSG_IGNDIR
+declare -a MSG_D001
+
+declare -a MSG_SKP001 MSG_SKP002 MSG_SKP003
+declare -a MSG_EXIF001 MSG_EXIF002 MSG_EXIF003
+
+declare -a MSG_UNSURE MSG_UNKNOWN
+#
+declare -a MSG_OVERWRITE
+declare -a MSG_EXIST
+#
+declare -a MSG_P001 MSG_PD001
+#
+declare -a MSG_RM000 MSG_RP000
+declare -a MSG_OLDPRE MSG_NEWPRE
+
+#x (for message language): 0=en, 1=zh_CN, 2=zh_TW
+#revered: also can translate OK/FAIL to native language
+MSG_OK=( " OK " " OK " " OK " )
+MSG_FAIL=( "FAIL" "FAIL" "FAIL" )
+MSG_PREFIX=( PREFIX 开头文字 開頭文字 )
+
+MSG_FILES=( FILES 单个/多个文件 單個/多個檔案 )
+MSG_USAGE=( usage 用法 用法 )
+MSG_ERROR=( error 错误 錯誤 )
+MSG_RENAME=( rename 重命名 重命名 )
+MSG_SKIP=( skip 跳过 跳過 )
+MSG_SAVEAS=( "save as" "另存为" "另存為" )
+MSG_IGNORE=( ignore 忽略 忽略 )
+
+#
+MSG_CAMERA=( Camera 相机 相機 )
+MSG_FORMAT=( Format 格式 格式 )
+
+#
+MSG_UNSURE=( unsure 不确定 不確定 )
+MSG_UNKNOWN=( unknown 未知 未知 )
+
+#
+MSG_EXIST=( "file existed" "文件已存在" "檔案已存在" )
+
+#
+MSG_OLDPRE=( "ORIG_PREFIX" "原文件名字头" "原檔案名字頭" )
+MSG_NEWPRE=( "NEW_PREFIX " "新文件名字头" "新檔案名字頭" )
+
+MSG_P001[0]="add prefix before filenames ..."
+MSG_P001[1]="在文件名前面添加文字..."
+MSG_P001[2]="在檔案名前面添加文字..."
+
+MSG_PD001[0]="add prefix and modify date before filenames ..."
+MSG_PD001[1]="在文件名前面添加文字和文件更新日期..."
+MSG_PD001[2]="在檔案名前面添加文字和檔案更新日期..."
+#
+MSG_OVERWRITE[0]="Overwrite existed file"
+MSG_OVERWRITE[1]="覆盖已存在的文件"
+MSG_OVERWRITE[2]="覆蓋已存在的檔案"
+
+###
+MSG_BAND001[0]="probe camera band by JPG/RAW/TIFF image filename format..."
+MSG_BAND001[1]="根据JPG/RAW/TIFF图像文件名格式, 推测相机/摄像机品牌..."
+MSG_BAND001[2]="根據JPG/RAW/TIFF圖像檔案名格式，推測相機/攝像機品牌..."
+
+#
+MSG_ERR001[0]="bad option or no enough arguments"
+MSG_ERR001[1]="错误的选项，或者参数不够"
+MSG_ERR001[2]="錯誤的選項，或者參數不夠"
+
+MSG_ERR002[0]="file not found or void"
+MSG_ERR002[1]="文件未找到，或者不可用"
+MSG_ERR002[2]="檔案未找到，或者不可用"
+
+MSG_ERR003[0]="never use \"/\" in filename string"
+MSG_ERR003[1]="文件名文字中不能出现斜杠\"/\""
+MSG_ERR003[2]="檔案名文字中不能出現斜杠\"/\""
+
+MSG_ERR004[0]="unknown file format or file void"
+MSG_ERR004[1]="未知的文件格式，或者文件不可用"
+MSG_ERR004[2]="未知的檔案格式，或者檔案不可用"
+
+MSG_ERR005[0]="never operate an archive file"
+MSG_ERR005[1]="不会对压缩文件进行操作"
+MSG_ERR005[2]="不會對壓縮檔案進行操作"
+
+MSG_ERR006[0]="void file format for suffix "
+MSG_ERR006[1]="文件实际格式不符合扩展名"
+MSG_ERR006[2]="檔案實際格式不符合擴展名"
+
+MSG_ERR007[0]="broken symbolic link file"
+MSG_ERR007[1]="无效的符号链接"
+MSG_ERR007[2]="無效的符號鏈接"
+
+MSG_ERR008[0]="unsupported filename suffix or file type"
+MSG_ERR008[1]="不支持的文件扩展名或类型"
+MSG_ERR008[2]="不支持的檔案擴展名或類型"
+
+MSG_ERR009[0]="never type \"/\" in prefix or suffix"
+MSG_ERR009[1]="输入的文字头/文字尾不能包含斜杠\"/\""
+MSG_ERR009[2]="輸入的文字頭/文字尾不能包含斜杠\"/\""
+
+MSG_ERR010[0]="blank file"
+MSG_ERR010[1]="空文件"
+MSG_ERR010[2]="空檔案"
+
+MSG_ERR011[0]="symbolic link"
+MSG_ERR011[1]="符号链接"
+MSG_ERR011[2]="符號鏈接"
+
+# for option --date
+MSG_D001[0]="add date prefix to filenames (auto snoop image taken or modify date, in format YYYY-MM-DD_ )..."
+MSG_D001[1]="在文件名前面添加日期（自动检测图像/文件的拍照或修改日期，格式为“年年年年-月月-日日_”）..."
+MSG_D001[2]="在檔案名前面添加日期（自動檢測圖像/檔案的拍照或修改日期，格式為“年年年年-月月-日日_”）..."
+
+#
+MSG_RD001[0]="removing date string in filenames, which in format YYYY-MM-DD_ ..."
+MSG_RD001[1]="移除文件名前面的日期文字（“年年年年-月月-日日_”格式）..."
+MSG_RD001[2]="移除檔案名前面的日期文字（“年年年年-月月-日日_”格式）..."
+
+MSG_RD002[0]="never rename a file to null name"
+MSG_RD002[1]="不会把文件改为空文件名"
+MSG_RD002[2]="不會把檔案改為空檔案名"
+
+MSG_RD003[0]="nothing to do"
+MSG_RD003[1]="没有做任何更改"
+MSG_RD003[2]="沒有做任何更改"
+
+#
+MSG_REM001[0]="removing special prefix in filenames..."
+MSG_REM001[1]="移除文件名开头的指定文字..."
+MSG_REM001[2]="移除檔案名開頭的指定文字..."
+
+#
+MSG_SUF001[0]="rename files by change suffix to"
+MSG_SUF001[1]="更改文件的扩展名为"
+MSG_SUF001[2]="更改檔案的擴展名為"
+
+#
+MSG_EXIF001[0]="removing EXIF metedata for JPG/RAW/TIFF images..."
+MSG_EXIF001[1]="移除JPG/RAW/TIFF图像的EXIF元数据..."
+MSG_EXIF001[2]="移除JPG/RAW/TIFF圖像的EXIF元數據..."
+
+MSG_EXIF002[0]="command 'convert' not found. please install package 'imagemagick' first. quit"
+MSG_EXIF002[1]="命令 convert 未找到。请先安装 imagemagick 软件包。退出"
+MSG_EXIF002[2]="命令 convert 未找到。請先安裝 imagemagick 軟體包。退出"
+
+MSG_EXIF003[0]="please input filename(s) and try again"
+MSG_EXIF003[1]="请输入文件名，然后再试"
+MSG_EXIF003[2]="請輸入檔案名，然後再試"
+
+#
+MSG_IGNDIR[0]="ignore DIRECTORY and accept FILE only"
+MSG_IGNDIR[1]="忽略目录, 只支持文件操作"
+MSG_IGNDIR[2]="忽略目錄, 只支持檔案操作"
+
+MSG_SKP001[0]="unrecognized date format, or no underline '_' behind"
+MSG_SKP001[1]="无法识别的日期格式，或者日期后面没有下划线“_”"
+MSG_SKP001[2]="無法識別的日期格式，或者日期後面沒有下劃線“_”"
+
+MSG_SKP002[0]="dated filename"
+MSG_SKP002[1]="文件名已包含日期"
+MSG_SKP002[2]="檔案名已包含日期"
+
+MSG_SKP003[0]="prefixed filename"
+MSG_SKP003[1]="文件名开头已包含指定的文字"
+MSG_SKP003[2]="檔案名開頭已包含指定的文字"
+
+# for option --remove-prefix, --replace-prefix
+MSG_RM000[0]="remove special PREFIX in filename..."
+MSG_RM000[1]="清除文件名前面的指定文字头..."
+MSG_RM000[2]="清除檔案名前面的指定文字頭..."
+
+MSG_RP000[0]="replace special PREFIX in filename..."
+MSG_RP000[1]="替换文件名前面的指定文字头..."
+MSG_RP000[2]="替換檔案名前面的指定文字頭..."
+
+### message defines end ###
+# -----------------------
+
+# Usage: usage
+# Print the usage.
+# ----
+usage () {
+cat <<EOF
+Usage: $APP [OPTION]
+
+$APP is a command line tool to rename JPG/RAW/TIF image and other 
+files, by add/remove/replace special suffix, prefix and date. it also can 
+remove EXIF metedata for JPG/RAW/TIF images, and more useful features
+
+  -b | --band FILES
+    probe camera band by JPG image filename format.
+    if no FILES given, print JPG image filename define infomations for
+    different bands of camera
+
+  -j | --jpg FILES
+    rename files by adding suffix JPG, except for *.JPG and *.JPEG files
+
+  -s | --suffix SUFFIX FILES
+    rename files by add or replace suffix to special
+
+  -ss | --short-suffix SUFFIX FILES
+    rename files by replace suffix to special
+    NOTICE: example for differences between option -s and -ss:
+      -s JPG 001.THM
+         output: 001.THM -> 001.THM.JPG
+      -ss JPG 001.THM
+         output: 001.THM -> 001.JPG
+
+  -d | --date FILES
+    rename files by adding date prefix (by file modify time stamp), in 
+    format YYYY-MM-DD_FILENAME
+  -p | --prefix PREFIX FILES
+    rename files by adding special PREFIX, in format PrefixAPP
+  -pd | --prefix-date PREFIX FILES
+    rename files by adding special PREFIX and file update/modify date, in 
+    format PrefixDate_FILENAME
+
+  -rd | --remove-date FILES
+    removing date strings in filenames, which in format YYYY-MM-DD_
+
+  -rmp | --remove-prefix PREFIX FILES
+    remove special prefix in filenames
+
+  -rpp | --replace-prefix ORIG_PREFIX NEW_PREFIX FILES
+    replace special prefix in filenames
+
+  --rmexif FILES
+    remove EXIF metedata for JPG/RAW/TIFF images, by call command
+    'convert' from imagemagick 
+
+  -x | --extra     show extra options 
+  --readme         show README file 
+  -v, --version    print the version information and exit
+  -h, --help       print this message and exit
+
+Homepage:
+https://sourceforge.net/projects/emacslocale/files/image-rename/
+
+GitHub: https://github.com/careone/image-rename
+
+Please report bugs to Careone <emacslocale@126.com>.
+EOF
+}
+
+usage_zh_CN () {
+cat <<EOF
+用法: $APP [选项]
+
+$APP 是一个用来对 JPG/RAW/TIF 图像和其它文件进行重命名的命
+令行工具。
+    它可以修改或添加文件扩展名、文字前缀，以及日期前缀等；
+    还可以清除 JPG/RAW/TIF 图像的EXIF 元数据，保护图像持有人和相机的
+相关隐私信息（如某些照片的 EXIF 元数据中甚至可能包含拍照地点的地理
+经纬度信息；如果是手机拍照，甚至可能还包含有手机主人的电话号码）
+
+  -b | --band 文件1 [文件2 ...]
+    根据 JPG 图像文件的文件名，推测拍照所用相机的品牌。
+    如果未指定文件，则显示不同数码相机的 JPG 图像文件命名规则
+
+  -j | --jpg 文件1 [文件2 ...]
+    以添加 JPG 扩展名的方式，重命名文件。
+    （忽略带 JPG 或者 JPEG 扩展名的文件）
+
+  -s | --suffix 扩展名 文件1 [文件2 ...]
+    以添加或替换扩展名的方式，对文件进行重命名
+
+  -ss | --short-suffix 扩展名 文件1 [文件2 ...]
+    以添加或替换扩展名的方式，对文件进行重命名
+    注意: 选项 -s 和 -ss 的作用效果区别:
+      -s JPG 001.THM
+         重命名方式: 001.THM -> 001.THM.JPG
+      -ss JPG 001.THM
+         重命名方式: 001.THM -> 001.JPG
+
+  -d | --date 文件1 [文件2 ...]
+    以添加“日期前缀”（以文件的修改时间来确定日期）的方式，对文件进行重命名。
+    重命名后的文件名格式：“年年年年-月月-日日_原文件名”
+  -p | --prefix 前缀 文件1 [文件2 ...]
+    以添加“文字前缀”的方式，对文件进行重命名。
+    重命名后的文件名格式：“前缀+原文件名”
+  -pd | --prefix-date 前缀 文件1 [文件2 ...]
+    以添加“文字前缀”和“日期”的方式，对文件进行重命名。
+    重命名后的文件名格式：“前缀+日期_原文件名”
+
+  -rd | --remove-date 文件1 [文件2 ...]
+    移除文件名开头的日期数字（必须是“年年年年-月月-日日_”格式）
+
+  -rmp | --remove-prefix 前缀 文件1 [文件2 ...]
+    “移除”文件名开头的特定的“文字前缀”
+
+  -rpp | --replace-prefix 旧前缀 新前缀 文件1 [文件2 ...]
+    用新的文字前缀，“替换”文件名开头原来的文字前缀
+
+  --rmexif 文件1 [文件2 ...]
+    移除 JPG/RAW/TIFF 图像的 EXIF 元信息
+   （通过调用 imagemagick 软件包的 convert 命令来实现）
+
+  -x | --extra     显示更多额外的选项
+  --readme       显示 README 帮助文件
+  -v, --version   显示版本信息并退出
+  -h, --help      显示帮助信息并退出
+
+主页:
+https://sourceforge.net/projects/emacslocale/files/image-rename/
+
+GitHub: https://github.com/careone/image-rename
+
+请报告缺陷给 Careone <emacslocale@126.com>.
+EOF
+}
+# ==== 
+
+# ----
+extraOption () {
+Extra Options
+
+cat <<EOF
+  -sf SUFFIX FILE_1 [FILE_2 ...]
+        similar to option -s, rename files by add or replace suffix to 
+        special, but FORCE overwrite existed files (may be DANGER!)
+
+  -sn SUFFIX FILE_1 [FILE_2 ...]
+        similar to option -s, rename files by add or replace suffix to 
+        special, but NEVER overwrite existed files
+
+  -ssf SUFFIX FILE_1 [FILE_2 ...]
+        similar to option -ss, rename files by replace suffix to 
+        special, but FORCE overwrite existed files (may be DANGER!)
+
+  -ssn SUFFIX FILE_1 [FILE_2 ...]
+        similar to option -ss, rename files by replace suffix to 
+        special, but NEVER overwrite existed files
+EOF
+}
+
+extraOption_zh_CN () {
+cat <<EOF
+其它额外功能
+
+  -sf 扩展名 文件1 [文件2 ...]
+        与选项 -s 类似, 通过添加或者替换扩展名的方式，对文件进行重命名，
+        并“强制”覆盖已有的同名文件 (可能有一定风险!)
+
+  -sn 扩展名 文件1 [文件2 ...]
+        与选项 -s 类似, 通过添加或者替换扩展名的方式，对文件进行重命名，
+        但是不会覆盖已有的同名文件 (取消对原文件的重命名操作)
+
+  -ssf 扩展名 文件1 [文件2 ...]
+        与选项 -ss 类似, 通过“替换”原扩展名的方式，对文件进行重命名，
+        并“强制”覆盖已有的同名文件 (可能有一定风险!)
+
+  -ssn 扩展名 文件1 [文件2 ...]
+        与选项 -ss 类似, 通过"替换"原扩展名的方式，对文件进行重命名，
+        但是不会覆盖已有的同名文件 (取消对原文件的重命名操作)
+EOF
+}
+# ====
+
+# ----
+listBand () {
+cat <<EOF
+JPEG/JPG: Joint Photograhic Experts Group
+DCIM: digital camera image
+
+file name format for digital camera:
+ ---------------
+  Canon:     IMG_****.JPG
+  Casio:     CIMG****.JPG
+  Fuji:	     DSCF****.JPG
+  GE:        GEDC****.JPG
+  Hasselblad:     Unknown
+  HP：	     HPIM****.JPG
+
+  Kodak:     ***_****.JPG
+  Konica:    PICT****.JPG
+  Leica:     L*******.JPG
+  Nikon:     DSCN****.JPG, DSC_****.JPG
+  Olympus:   PA******.JPG
+  Panasonic: P*******.JPG
+  Pentax:    IMGP****.JPG
+
+  Ricoh:     RIMG****.JPG
+  Samsung:   SSM*****.JPG, SSCAM***.JPG, PMP*****.JPG
+  Sony:	     DSC*****.JPG
+
+Mobile Phones:
+  Meizu:   P*****-******.jpg, S*****-******.jpg
+           P{YMMDD-hhmmss}.jpg, S{YMMDD-hhmmss}.jpg
+
+  Xiaomi and some others: IMG_********_******.jpg
+                          IMG_YYYYMMDD_hhmmss.jpg
+EOF
+}
+
+listBand_zh_CN () {
+cat <<EOF
+数码相机图像默认文件名规则
+说明：每个星号(*)代表一个0-9的数字
+ ---------------
+  Canon (佳能):	      IMG_****.JPG
+  Casio (卡西欧):     CIMG****.JPG
+  Fujifilm (富士):    DSCF****.JPG
+  GE (通用):          GEDC****.JPG
+  Hasselblad (哈苏):  未知
+  HP (惠普)：         HPIM****.JPG
+
+  Kodak (柯达):	      ***_****.JPG
+  Konica (柯尼卡):    PICT****.JPG
+  Leica (徕卡):       L*******.JPG
+  Nikon (尼康):	      DSCN****.JPG, DSC_****.JPG
+  Olympus (奥林巴斯): PA******.JPG
+  Panasonic (松下):   P*******.JPG
+  Pentax (宾得):      IMGP****.JPG
+
+  Ricoh (理光):       RIMG****.JPG
+  Samsung (三星):     SSM*****.JPG, SSCAM***.JPG, PMP*****.JPG
+  Sony (索尼):        DSC*****.JPG
+
+手机:
+  Meizu (魅族):    P*****-******.jpg
+                   S*****-******.jpg
+                   P年月月日日-时时分分秒秒.jpg
+                   S年月月日日-时时分分秒秒.jpg
+
+  Xiaomi (小米)/其它手机:  IMG_********_******.jpg
+                           IMG_年年年年月月日日_时时分分秒秒.jpg
+EOF
+}
+# ====
+
+
+## PART 2: main
+# Check the arguments.
+
+for option in "$@"; do
+    case "$option" in
+    	-h | --help)
+ 	  if "usage_$CLANG" 2>/dev/null &>/dev/null; then
+	    "usage_$CLANG"
+	  else usage
+	  fi
+	exit 0 ;;
+
+
+	### todo ###
+  	-b | --band)
+	opt="$1"
+	##  -b FILES
+	## todo:
+	## unsupported band and filename format:
+	## 徕卡（Leica）
+	## 哈苏（Hasselblad）
+	## apple
+
+	shift
+	if [ "$#" -eq 0 ]; then
+ 	  if "listBand_$CLANG" 2>/dev/null &>/dev/null; then
+	    "listBand_$CLANG"
+	  else listBand
+	  fi	
+	  exit 0 ;
+
+	else #[ "$#" -ge 1 ]
+	  echo "${MSG_BAND001[x]}"
+
+	  id="1" #init
+
+## for JPG/RAW/TIFF images
+      for a in "$@"; do
+       if [ -s "$a" ] && [ -f "$a" ] && [ -r "$a" ]; then
+
+	case `file "$a"` in
+	*"JPEG image data"*)
+	    PBAND=1 #1 means need to probe camera band, 0 means never
+  	    FORMAT="JPG"
+		;;
+
+#,fuzzy
+# maybe camera RAW format images = TIFF format, but i'm not sure
+	*"TIFF image data"*)
+	    PBAND=1 
+  	    FORMAT="RAW/TIF"
+		;;
+	*"RAW image data"*)
+	    PBAND=1 
+  	    FORMAT="RAW"
+		;;
+
+# probe more image formats: 
+	*"PC bitmap,"*)
+	    PBAND=0 #0 means not probe camera band
+  	    FORMAT="BMP"
+		;;
+	*"GIF image data"*)
+	    PBAND=0 
+  	    FORMAT="GIF"
+		;;
+	*"PNG image,"*)
+	    PBAND=0 
+  	    FORMAT="PNG"
+		;;
+#
+	*"Adobe Photoshop Image"*)
+	    PBAND=0 
+  	    FORMAT="PSD"
+		;;
+	*"PDF document"*)
+	    PBAND=0 
+  	    FORMAT="PDF"
+		;;
+	*"SVG Scalable Vector Graphics image"*)
+	    PBAND=0 
+  	    FORMAT="SVG"
+		;;
+	*"PostScript document"*)
+	    PBAND=0 
+  	    FORMAT="PS"
+		;;
+	*"DICOM medical imaging data"*)
+	    PBAND=0 
+  	    FORMAT="DCM"
+		;;
+	*"Targa image data"*)
+	    PBAND=0 
+  	    FORMAT="TGA"
+		;;
+
+# probe zip/rar/gz/tar/... archive files
+	*"Zip archive data,"*)
+	    PBAND=0 
+  	    FORMAT="ZIP"
+		;;
+	*"gzip compressed data,"*)
+	    PBAND=0 
+  	    FORMAT="GZ"
+		;;
+	*"RAR archive data,"*)
+	    PBAND=0 
+  	    FORMAT="RAR"
+		;;
+	*"POSIX tar archive"*)
+	    PBAND=0 
+  	    FORMAT="TAR"
+		;;
+
+#
+	*)
+	    PBAND=0 
+  	    FORMAT=""
+	    echo -ne '\E[1;31m'
+            echo -ne "$id * '$a'\t(${MSG_ERR004[x]})" 1>&2
+		tput sgr0;
+	    echo
+
+	    let "id += 1"
+	    continue
+		;;
+	esac		
+#fi
+
+#--------------------
+# 
+   if [ "$PBAND" = "1" ];then
+ # tr 'a-z' 'A-Z' : force replace lowercase to uppercase, for test filename
+	    case `echo "$a" | tr 'a-z' 'A-Z'` in
+
+# for XiaoMi mobile phones from China, and some other phones
+# filename example: IMG_YYYYMMDD_hhmmss.jpg
+# different between "unsure" and "unknown"
+# unsure:  image may be from any camera or phone
+# unknown: image may be not taken by any camera or phone, because filename
+#   	   not match any rule
+		*IMG_[1-9][0-9][0-9][0-9][01][0-9][0-3][0-9]_[0-2][0-9][0-5][0-9][0-5][0-9]*.*)
+		BAND="${MSG_UNSURE[x]}"
+		;;
+
+#
+		*IMG_[0-9][0-9][0-9][0-9]*.*)
+		BAND="Canon"
+		;;
+		*CIMG[0-9][0-9][0-9][0-9]*.*)
+		BAND="Casio"
+		;;
+		*DSCF[0-9][0-9][0-9][0-9]*.*)
+		BAND="Fuji"
+		;;
+		*GEDC[0-9][0-9][0-9][0-9]*.*)
+		BAND="GE"
+		;;
+		*HPIM[0-9][0-9][0-9][0-9]*.*)
+		BAND="HP"
+		;;
+
+		*PICT[0-9][0-9][0-9][0-9]*.*)
+		BAND="Konica"
+		;;
+		*DSC_N[0-9][0-9][0-9][0-9]*.*)
+		BAND="Nikon"
+		;;
+		*PA[0-9][0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="Olympus"
+		;;
+		*P[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="Panasonic"
+		;;
+
+		*IMGP[0-9][0-9][0-9][0-9]*.*)
+		BAND="Pentax"
+		;;
+		*RIMG[0-9][0-9][0-9][0-9]*.*)
+		BAND="Ricoh"
+		;;
+		*SSM[0-9][0-9][0-9][0-9][0-9]*.* | *SSCAM[0-9][0-9][0-9]*.* | *PMP[0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="Samsung"
+		;;
+		*DSC[0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="Sony"
+		;;
+
+#
+		*L[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="Leica"
+		;;
+
+	# pictures from some phones in format YYYYMMDD_hhmmss.JPG
+	# if a picture named as 20140315_235959.jpg, in most cases, it
+	# not from a Kodak camera. so need to probe KOdak mode after
+	# 'unknown phone' mode
+	*[1-9][0-9][0-9][0-9][01][0-9][0-3][0-9]_[0-2][0-9][0-5][0-9]*.*)
+		BAND="${MSG_UNSURE[x]}"
+		;;
+
+# 
+		*[0-9][0-9][0-9]_[0-9][0-9][0-9][0-9]*.*)
+		BAND="Kodak"
+		;;
+
+# for mobile phones
+	# for Meizu phone from China:
+	# P40315-235959.jpg or S40315-235959.jpg,
+	# means photo taken at 2014/03/15, 23:59:59
+		*[PS][0-9][01][0-9][0-3][0-9]-[0-2][0-9][0-5][0-9]*.*)
+		BAND="Meizu"
+		;;
+
+		*IMG[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*.*)
+		BAND="${MSG_UNSURE[x]}"
+		;;
+
+# for all others unknown
+		*)
+		BAND="${MSG_UNKNOWN[x]}"
+		;;
+		
+	    esac
+	
+	    echo -e "$id * '$a'\t(${MSG_CAMERA[x]}: $BAND; ${MSG_FORMAT[x]}: $FORMAT)"
+  else
+	echo -e "$id * '$a'\t(${MSG_FORMAT[x]}: $FORMAT)"
+  fi
+	    let "id += 1"
+
+  elif [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link file
+	:
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ ! -s "$a" ]; then
+    echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_ERR010[x]})" 1>&2
+    let "id += 1"
+    continue
+
+  else 
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+  fi
+	   done
+
+fi
+	exit 0 ;;
+
+# for options: ---------------------
+# tag 550
+-j | --jpg | -s | --suffix | -ss | --short-suffix | -sf | -sn | -ssf | -ssn)
+
+OPT="$1"
+##  -j [FILES]
+##  -s SUFFIX FILES
+#    check filenames are in suffix JPG/JPEG. if not, add JPG suffix
+#    or any other
+	id="1" #init
+
+  case "$OPT" in
+	-j | -jpg)
+	  if [ "$#" -le 1 ];then
+	    echo "  ${MSG_EXIF003[x]}" 1>&2
+	    exit 0
+	  else
+	  SUFFIX="JPG"
+	  PURE_SUFFIX="$SUFFIX"
+	  shift
+	  fi
+	;;
+	-s | --suffix | -ss | --short-suffix | -sf | -sn | -ssf | -ssn)
+	  if [ "$#" -le 2 ];then
+	    echo "  ${MSG_ERR001[x]}" 1>&2
+	    exit 0
+	  else 
+	    SUFFIX="$2"
+
+# check for option '--suffix', if suffix with symbol '/' included by mistake,
+# or forget input suffix and think the first filename (with directory name) 
+# as suffix to do wrong renaming
+# sample: -s /JPG FILES
+# and should be: "-s JPG FILES" (because of bad symbol '/')
+  if echo "$SUFFIX" | grep "\/" &>/dev/null; then
+	echo "  ${MSG_ERR009[x]}" 1>&2
+	exit 0
+  fi
+
+PURE_SUFFIX="$SUFFIX" 	#default
+
+  if echo "$SUFFIX" | grep '\.' &>/dev/null; then
+# check and pure suffix:
+# throw spaces, double dots, front dot(s), end dot(s) in suffix, such as:
+# ' .tar.gz ' -> 'tar.gz'
+# '...tar..gz..' -> 'tar.gz'
+
+
+while `echo "$SUFFIX" | grep '^\.' &>/dev/null || echo "$SUFFIX" | grep '\.$' &>/dev/null || echo "$SUFFIX" | grep '\ ' &>/dev/null`; do
+PURE_SUFFIX=`echo "$SUFFIX" | sed '/\ /s///g;/\.\./s//\./g;/\.$/s///g;/^\./s///g;'`
+SUFFIX="$PURE_SUFFIX"
+done
+
+  fi
+
+	    shift 2
+
+	  fi
+	;;
+	*)echo "Unrecognized option \`$OPT'" 1>&2
+	exit 1;;
+  esac
+
+  echo "${MSG_SUF001[x]} '$PURE_SUFFIX' ..."
+
+
+# now start work
+for a in "$@"; do
+## if file named begin with '-' (such as '-my-file.jpg'), may cause error
+#  when run dirname and basename.
+#  so use 'dirname -- FILE', not 'dirname FILE'
+DIRNAME=`dirname -- "$a"`
+BASENAME=`basename -- "$a"`
+
+# tag L395
+
+  if echo "$BASENAME" | grep -i "\.$PURE_SUFFIX$" 2>/dev/null &>/dev/null;then
+#   echo "  L653 BASENAME = '$BASENAME'"
+#   echo "     PURE_SUFFIX='$PURE_SUFFIX'" 
+   echo -e "$id * ${MSG_IGNORE[x]}: '$a'" 1>&2
+    let "id += 1"
+    continue
+  else :
+ #  echo "  L659 BASENAME = '$BASENAME'"
+  # echo "     PURE_SUFFIX='$PURE_SUFFIX'" 
+
+  fi
+
+# check argument FILES is a file or directory, or others
+
+  if [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link files
+	:
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ ! -e "$a" ]; then
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ ! -s "$a" ]; then
+    echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_ERR010[x]})" 1>&2
+    let "id += 1"
+    continue
+
+  elif [ -e "$a" ]; then
+    :
+
+  else 
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR004[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+  fi
+
+# check suffix to rename with, for JPG/JPEG, TIFF/RAW images and 
+# archive/compressed data
+
+case `echo "$PURE_SUFFIX" | tr 'a-z' 'A-Z'` in
+  JPG | JPEG)
+	SUFFIX_TYPE="JPG" #check suffix string is known type or unknown
+	;;
+   
+  TIF | TIFF)
+	SUFFIX_TYPE="TIF"
+	;;
+
+#below are kinds of RAW image files, may be probed as TIF files
+# 
+  DNG)
+	SUFFIX_TYPE="TIF"
+	BAND="Leica/Adobe"  
+	;;
+  RAW)
+	SUFFIX_TYPE="TIF"
+	BAND="Panasonic/Leica"  
+	;;
+
+#
+  3FR)
+	SUFFIX_TYPE="TIF"
+	BAND="Hasselblad"  
+	;;
+  ARI)
+	SUFFIX_TYPE="TIF"
+	BAND="Arriflex"  
+	;;
+
+  ARW | SR[F2])
+	SUFFIX_TYPE="TIF"
+	BAND="Sony"  
+	;;
+
+  BAY)
+	SUFFIX_TYPE="TIF"
+	BAND="Casio"  
+	;;
+
+  CR[W2])
+	SUFFIX_TYPE="TIF"
+	BAND="Canon"  
+	;;
+
+  CAP | [IE]IP)
+	SUFFIX_TYPE="TIF"
+	BAND="Phase_One"  
+	;;
+
+  DC[SR] | DRF | K25 | KDC)
+	SUFFIX_TYPE="TIF"
+	BAND="Kodak"  
+	;;
+
+  ERF)
+	SUFFIX_TYPE="TIF"
+	BAND="Epson"  
+	;;
+
+  FFF)
+	SUFFIX_TYPE="TIF"
+	BAND="Imacon"  
+	;;
+
+  MEF)
+	SUFFIX_TYPE="TIF"
+	BAND="Mamiya"  
+	;;
+
+  MOS)
+	SUFFIX_TYPE="TIF"
+	BAND="Leaf"  
+	;;
+
+  MRW)
+	SUFFIX_TYPE="TIF"
+	BAND="Minolta"  
+	;;
+
+  NEF | NRW)
+	SUFFIX_TYPE="TIF"
+	BAND="Nikon"  
+	;;
+
+  ORF)
+	SUFFIX_TYPE="TIF"
+	BAND="Olympus"  
+	;;
+
+  PEF | PTX)
+	SUFFIX_TYPE="TIF"
+	BAND="Pentax"  
+	;;
+
+  PXN)
+	SUFFIX_TYPE="TIF"
+	BAND="Logitech"  
+	;;
+
+  R3D)
+	SUFFIX_TYPE="TIF"
+	BAND="Red"  
+	;;
+
+  RAF)
+	SUFFIX_TYPE="TIF"
+	BAND="Fujifilm"  
+	;;
+
+  RA2 | RAW)
+	SUFFIX_TYPE="TIF"
+	BAND="Panasonic"  
+	;;
+
+  RWL | DNG | RAW)
+	SUFFIX_TYPE="TIF"
+	BAND="Leica"  
+	;;
+
+  RWZ)
+	SUFFIX_TYPE="TIF"
+	BAND="Rawzor"  
+	;;
+  SRW)
+	SUFFIX_TYPE="TIF"
+	BAND="Samsung"  
+	;;
+  X3F)
+	SUFFIX_TYPE="TIF"
+	BAND="Sigma"  
+	;;
+
+  *)	SUFFIX_TYPE="OTHERS"
+	BAND="" 
+	;;
+esac
+
+# probe file MIME for JPG/TIF/RAW and archive files, to stop bad renaming
+# by mistake
+
+# case `file -L "$a"` in	# file -L: follow symlinks
+ case `file "$a"` in
+ 	*"broken symbolic link to"*)
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+	;;
+
+	*"symbolic link to"*)
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR011[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+	;;
+
+  	*" JPEG image data"*)
+  	PROBED_TYPE="JPG"
+  	SUFFIX_CHECK=1	#1 for check, 0 not check
+	;;
+
+ 	*" TIFF image data"*)
+  	PROBED_TYPE="TIF"
+  	SUFFIX_CHECK=1
+	;;
+
+ 	*" archive "*)
+  	PROBED_TYPE="ARCHIVE"
+  	SUFFIX_CHECK=1
+	;;
+
+ 	*" compressed "*)
+  	PROBED_TYPE="ARCHIVE"
+  	SUFFIX_CHECK=1
+	;;
+
+	*)
+  	PROBED_TYPE="OTHERS"
+  	SUFFIX_CHECK=0
+	;;
+   esac
+
+# check filename suffix	be already in *.SUFFIX format or not;
+# cmd: grep -i '\.JPG$' means search filename ended with .JPG
+#
+    if echo "$a" | grep -i "\.$PURE_SUFFIX$" &>/dev/null;then
+
+	    echo -e "$id * ${MSG_SKIP[x]}: '$a'\t({$MSG_RD003[x]})" 1>&2
+#	echo "  L839 "
+	    let "id += 1"
+	    continue
+   fi
+
+# diff PROBED_TYPE and SUFFIX to rename with
+if [ "$PROBED_TYPE" = "ARCHIVE" ];then
+  echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR005[x]})"
+  let "id += 1"
+  continue
+
+
+#elif echo "${ARRAY_SUFFIX[@]}" | grep -i "$SUFFIX" 2>/dev/null &>/dev/null;then
+#  RENAME=1 	#1 means do rename, 0 do nothing
+
+# never rename a non-jpg file to *.jpg
+elif [ "$PROBED_TYPE" != "JPG" ] && [ "$SUFFIX_TYPE" = "JPG" ];then
+  echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR006[x]}'$PURE_SUFFIX')"
+  let "id += 1"
+  continue
+
+# and never rename a non-tif file to *.tif
+elif [ "$PROBED_TYPE" != "TIF" ] && [ "$SUFFIX_TYPE" = "TIF" ];then
+  echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR006[x]}'$PURE_SUFFIX')"
+  let "id += 1"
+  continue
+
+else
+  # allow other renaming
+  :
+fi
+
+  #if
+# do renaming
+# ---------------------------
+## mv -i: ask before overwrite
+#  mv -i "$a" "$a.$SUFFIX"
+#  notice: please use -- to tell bash arguments are over, such as
+#  'mv -i -- OLD_FILE NEW_FILE'
+##---------------
+
+## PARTS: numbers of dot . 
+
+##-------------------
+ORIG_BASENAME="$BASENAME"
+PURE_BASENAME="$BASENAME"	#default
+
+# clean double spaces (  ) and dot (..) to single one only,
+# and remove last dot (.) and spaces at filename end
+# example: 'my  file...jpg..' -> 'my file.jpg'
+while `echo "$BASENAME" | grep '\.$' &>/dev/null || echo "$BASENAME" | grep '\ $' &>/dev/null`; do
+PURE_BASENAME=`echo "$BASENAME" | sed '/\.$/s///g;/\ $/s///g'`
+BASENAME="$PURE_BASENAME"
+done
+
+#echo "L907"
+#echo "'$a': (PURE_BASENAME = '$PURE_BASENAME')"
+#let "id += 1"
+#continue
+
+#
+PARTS=`echo "$PURE_BASENAME" | sed '/\./s//\n./g' | grep -c "\."`
+
+# TODO: string LAST_SUFFIX maybe not used, or used as other name
+#LAST_SUFFIX=`echo "$PURE_BASENAME" | sed '/\./s//\n./g' | tail -1`
+
+# if no suffix or have 1 suffix only, add new suffix
+if [ "$PARTS" -lt 1 ];then
+  NEWNAME="$PURE_BASENAME.$PURE_SUFFIX"
+
+elif [ "$PARTS" -eq 1 ];then
+  case "$OPT" in
+  -ss | --short-suffix | -ssf | -ssn)
+  # remove spaces found at filename end
+  PURE_BASENAME=`echo "$PURE_BASENAME" | cut -d'.' -f1 | sed '/\ $/s///g'`
+
+	;;
+  *)	echo "Unrecognized option \`$OPT'" 1>&2
+	exit 1;;
+  esac
+  NEWNAME="$PURE_BASENAME.$PURE_SUFFIX"
+
+# if have 2 or more suffix, replace the last 
+else
+#  let "DOTS = PARTS - 1"	# DOTS: amount of dot (.)
+#
+  case "$OPT" in
+
+	-ss | --short-suffix | -ssf | -ssn)
+	let "PARTS -= 1"	#remove suffix as more as possible
+	;;
+
+	*)	echo "Unrecognized option \`$OPT'" 1>&2
+	exit 1;;
+  esac
+  NEWNAME=`echo "$PURE_BASENAME" | cut -d'.' -f1-$PARTS | sed '/\.$/s///g;/\ $/s///g'`
+  
+#echo "$BASENAME" | sed '/\./s//\n./g' | tail -1`
+
+# if NEWNAME already in special suffix, keep NEWNAME as new filename
+# samples: -s JPG 001.JPG.BMP
+# output:
+# 001.JPG.BMP -> 001.JPG
+  if echo "$NEWNAME" | grep -i "\.$PURE_SUFFIX$" 2>/dev/null &>/dev/null;then
+	:
+	#  NEWNAME=""	#keep NEWNAME and do nothing on it
+  else
+  NEWNAME="$NEWNAME.$PURE_SUFFIX"
+  fi
+
+fi
+
+  if [ "$a" -ef "$NEWNAME.$PURE_SUFFIX" ]; then
+    echo -e "$id * ${MSG_IGNORE[x]}: '$a'" 1>&2
+    let "id += 1"
+    continue
+  else
+    if [ ! -e "$DIRNAME/$NEWNAME" ];then
+      echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEWNAME' "
+      mv -i -- "$a" "$DIRNAME/$NEWNAME"
+    	else
+	case "$OPT" in
+	-j | -s | -ss | --suffix | --short-suffix)
+    echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEWNAME' "
+   	  mv -i -- "$a" "$DIRNAME/$NEWNAME"
+	;;
+	-sf | -ssf)
+	#force overwrite existed files when rename
+    echo -en "$id * ${MSG_RENAME[x]}: '$a' -> '$NEWNAME'\t(${MSG_OVERWRITE[x]}) " 1>&2
+   	  mv -- "$a" "$DIRNAME/$NEWNAME"
+	;;
+	-sn | -ssn)
+    echo -en "$id * ${MSG_SKIP[x]}: '$a' -> '$NEWNAME'\t(${MSG_EXIST[x]}) " 1>&2
+	#skip and never overwrite existed files when rename
+   	  mv -n -- "$a" "$DIRNAME/$NEWNAME"
+	;;
+	*)
+    echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEWNAME' "
+   	  mv -i -- "$a" "$DIRNAME/$NEWNAME"
+	;;
+	esac
+
+    fi
+  fi
+
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK "; tput sgr0;
+	echo "] "
+	
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "] "
+	    fi
+
+	    let "id += 1"
+	    continue
+
+# ---------------------------
+
+	   done
+
+	exit 0 ;;
+
+#------------------------------------------------
+#
+  -d | --date | -p | --prefix | -pd | --prefix-date)
+## usage: -d FILES
+#  	  -p PREFIX FILES
+#  	  -pd PREFIX FILES
+
+OPT="$1"	#get option string
+id="1" #init
+
+#---------------
+## ---- checking optional options ----
+  case "$OPT" in
+	-d | -date)
+	echo "${MSG_D001[x]}"
+	if [ "$#" -ge 2 ];then
+	    PREFIX=""	#init
+	  shift
+	else
+	    echo "${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_FILES[x]}"
+	    exit 0
+	fi
+
+	;;
+	-p | --prefix)
+	echo "${MSG_P001[x]}"
+	  if [ "$#" -ge 3 ];then
+	## example: -p China IMG00001.JPG
+	## output: 	IMG00001.JPG -> ChinaIMG00001.JPG
+	    PREFIX="$2"	
+	    shift 2
+	  else
+	    echo "${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_PREFIX[x]} ${MSG_FILES[x]}"
+	    exit 0
+	  fi
+	;;
+
+	-pd | --prefix-date)
+	echo "${MSG_PD001[x]}"
+	  if [ "$#" -ge 3 ];then
+	    PREFIX="$2"	
+	    shift 2
+	  else
+	    echo "${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_PREFIX[x]} ${MSG_FILES[x]}"
+	    exit 0
+	  fi
+	;;
+
+	*)	echo "Unrecognized option \`$OPT'" 1>&2
+	exit 1;;
+  esac
+
+#---------------
+ 
+   for a in "$@"; do
+ if [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+ elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link file
+	:
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+elif [ -f "$a" ] && [ -r "$a" ]; then
+## show created time of file, such as:
+## ls -lt --time-style=full-iso 000.jpg
+# -rwxr-xr-x 1 user user 95519 2013-12-12 10:57:16.000000000 +0800 000.jpg
+#
+#DATE=`ls -lt --time-style=full-iso "$a" 2>/dev/null | cut -d' ' -f6`
+DATE=`ls -l --time=ctime --time-style=full-iso "$a" 2>/dev/null | cut -d' ' -f6`
+
+DIRNAME=`dirname -- "$a"`
+BASENAME=`basename -- "$a"`
+
+#------------------
+
+  case "$OPT" in
+	-d | -date)
+	  NEWNAME="${DATE}_$BASENAME"
+if echo "$BASENAME" | grep ^[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_ &>/dev/null; then
+   echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_SKP002[x]})" 1>&2
+   let "id += 1"
+   continue
+fi
+	;;
+
+	-p | --prefix)
+	if [ "$DEBUG" = 1 ]; then
+echo "L1291 BASENAME = '$BASENAME'"
+echo "PREFIX = '$PREFIX'"
+	fi
+
+	NEWNAME="$PREFIX$BASENAME"
+	
+  if echo "$BASENAME" | grep ^"$PREFIX" &>/dev/null;then
+    echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_SKP003[x]})" 1>&2
+    let "id += 1"
+    continue
+  fi
+	;;
+
+	-pd | --prefix-date)
+	  NEWNAME="$PREFIX${DATE}_$BASENAME"
+
+if echo "$BASENAME" | grep ^"$PREFIX"[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_ &>/dev/null; then
+	   echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_SKP003[x]})" 1>&2
+	   let "id += 1"
+	   continue
+fi
+	;;
+
+	*)echo "Unrecognized option \`$OPT'" 1>&2
+	exit 1;;
+  esac
+#-----------------------
+#echo "L744 NEWNAME = '$NEWNAME'"
+	    echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEWNAME' "
+#	    let "id += 1"
+	    mv -i -- "$a" "$DIRNAME/$NEWNAME"
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK ";tput sgr0;
+	echo "]"
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "]"
+	    fi
+
+  let "id += 1"
+  continue
+
+#------------------
+ else 
+    echo
+    echo -e "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+  let "id += 1"
+  continue
+ 
+ fi
+
+done
+	exit 0 ;;
+
+
+#===========================================
+
+
+## for option --remove-date
+  -rd | --remove-date)
+	id="1"	#init
+	OPT="$1"
+	
+echo "${MSG_RD001[x]}"
+	if [ "$#" -le 1 ];then
+	    echo "  ${MSG_ERROR[x]}: ${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_FILES[x]}"
+	    exit 0
+ 	fi
+
+	shift
+
+for a in "$@"; do
+
+  if [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+ elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link file
+	:
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+
+ elif [ -f "$a" ] && [ -r "$a" ]; then
+  DIRNAME=`dirname -- "$a"`
+  BASENAME=`basename -- "$a"`
+	case "$BASENAME" in
+  [1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_)
+#never rename a file to null name, such as filename "2014-01-01_"
+	echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_RD002[x]})" 1>&2
+   let "id += 1"
+   continue
+	;;
+
+  *[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_*)
+
+# get date strings in format "YYYY-MM-DD_", and
+# must keep underline '_' behind date
+declare -a DATE_STRINGS 
+DATE_STRINGS=( `echo "$BASENAME" | sed 's/_/_\n/g' | grep [1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_$` )
+
+	if [ "$DEBUG" = 1 ];then
+	:
+#DATE_STRINGS=( `echo "$BASENAME" | sed 's/_/_\n/g' | grep ^[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_$` )
+
+## debug begin
+
+#echo "$BASENAME" | sed 's/_/_\n/g' | grep ^[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]_$
+#echo
+
+#echo "L1367 DATE_STRINGS = '${DATE_STRINGS[@]}'"
+#echo "#DATE_STRINGS = '${#DATE_STRINGS[@]}'"
+	fi
+
+let "maxid = ${#DATE_STRINGS[@]} - 1"
+	if [ "$maxid" -lt 0 ];then
+	  maxid="0"
+	fi
+#
+	if [ "$DEBUG" = 1 ];then
+	  echo "L1345 maxid = '$maxid'"
+	  echo "DATE_STRINGS= ( ${DATE_STRINGS[@]} )"
+	  echo "#DATE_STRINGS= '${#DATE_STRINGS[@]}'"
+	  echo "id = '$id'"
+	fi
+#continue
+## debug end
+
+for n in `seq 0 "$maxid"`; do
+  DATESTR="${DATE_STRINGS[n]}"
+
+# command: echo ${str:(-6):5}  
+# -6: from right to left, the 6th charactor
+# 5: 5 charactors
+#
+# remove string before date "YYYY-MM-DD_". 
+# if file named as "ShangHai2014-01-01_IMG12345.jpg",
+# shall be rename to ShangHai_IMG12345.jpg by command 'image-rename -rd *'
+  DATESTR=`echo ${DATESTR:(-11):11}`
+
+	if [ "$DEBUG" = 1 ];then
+	  echo "L1363 DATESTR = '$DATESTR'"
+	fi
+
+  NEW_BASENAME=`echo "$BASENAME" | sed "s/${DATESTR}//g"`
+if [ "$DEBUG" = 1 ];then
+	echo "L1347 BASENAME = '$BASENAME'"
+	echo "  NEW_BASENAME = '$NEW_BASENAME'"
+fi
+#	exit 0
+#	echo
+  if [ "$NEW_BASENAME" != "" ];then
+    BASENAME="$NEW_BASENAME"
+  else
+	#if filename such as '2014-01-01_', never rename to null name, and
+	#need to restore BASENAME before last date string removing
+	NEW_BASENAME="$BASENAME" 
+  if [ "$DEBUG" = 1 ];then
+	echo "L1356 BASENAME = '$BASENAME'"
+	echo "  NEW_BASENAME = '$NEW_BASENAME'"
+  fi
+#	exit 0
+#	echo
+
+## ,fuzzy 2014-03-20
+# enable or disable 'break' ?
+# disable break now work well on test and debug.
+#	break;
+  fi
+done
+
+    if [ "$a" -ef "$DIRNAME/$NEW_BASENAME" ];then	
+      echo -e "$id * ${MSG_SKIP[x]}: '$a'" 1>&2
+    else
+      echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEW_BASENAME' "
+      mv -i -- "$a" "$DIRNAME/$NEW_BASENAME"
+    fi
+
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK ";tput sgr0;
+	echo "]"
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "]"
+	    fi
+
+   let "id += 1"
+   continue
+  ;;
+
+  *[0-9][0-9][0-9][0-9][_-][0-9][0-9][_-][0-9][0-9]*)
+# skip files like 2014-99-99, which not a date 
+   echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_SKP001[x]})" 1>&2
+   let "id += 1"
+   continue
+  ;;
+
+  *)
+   echo "$id * ${MSG_SKIP[x]}: '$a'" 1>&2
+   let "id += 1"
+   continue
+  ;;
+	esac
+
+#--
+
+ else 
+    echo
+    echo -e "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+  let "id += 1"
+  continue
+fi
+
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK ";
+	tput sgr0;
+	echo "] "
+	
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "] "
+	    fi
+
+done
+;;
+
+## for option --rmexif
+##========================================
+
+  # remove exif metedata for JPG/RAW/TIFF images,
+  # by call command 'convert' from imagemagick 	
+   
+  --rmexif)
+    echo "${MSG_EXIF001[x]}"
+    if ! which convert &>/dev/null; then
+	echo "${MSG_ERROR[x]}: ${MSG_EXIF002[x]}" 1>&2
+	exit 0
+    fi
+
+    if [ "$#" -lt 2 ];then
+	echo "${MSG_EXIF003[x]}"
+	exit 0
+    fi
+    shift
+
+id="1"	#init
+NOEXIF="noexif"	#suffix string to add. example: A.JPG -> A.JPG.noexif.JPG
+
+for a in "$@"; do
+
+ if [ -f "$a" ] && [ -r "$a" ]; then
+  DIRNAME=`dirname -- "$a"`
+  BASENAME=`basename -- "$a"`
+  
+  LAST_SUFFIX=`echo "$BASENAME" | sed '/\./s//\n./g' | tail -1`
+# echo "L1206 LAST_SUFFIX = '$LAST_SUFFIX'"
+
+
+# probe file MIME format
+   case `file "$a"` in
+
+	*"JPEG image data,"*)
+	  DO_RMEXIF="1"	#for JPG/JPEG images, and 1 means yes, 0 means no
+	  MIME="JPG"
+	;;
+
+	*"TIFF image data,"*)
+	  DO_RMEXIF="1"	#for TIF/TIFF/RAW images, and 1 means yes, 0 means no
+	  MIME="TIF"	#notice: TIF/TIFF/RAW images also be probed as TIFF files
+	;;
+
+	# probe and ignore archive files
+	*" archive "*)
+	  DO_RMEXIF="2"	
+	  MIME="ARCHIVE"
+	;;
+
+	*" compressed "*)
+	  DO_RMEXIF="2"	
+	  MIME="ARCHIVE"	#uppercase
+	;;
+
+	# all others
+	*)
+	  DO_RMEXIF="0"
+	  MIME="UNKNOWN"	#uppercase
+	  echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_ERR004[x]})"
+	  let "id += 1"
+	  continue
+	;;
+   esac
+
+# if files named as 'xx...', or not available JPG/RAW/TIFF images, 
+# ignore and do nothing
+    if [ "$DO_RMEXIF" = "1" ]; then
+	case `echo "$LAST_SUFFIX" | tr 'a-z' 'A-Z'` in
+	.JPG | .JPEG)
+	SUFFMT="JPG"	#suffix format
+	;;
+
+	.TIF | .TIFF)
+	SUFFMT="TIF"
+	;;
+
+	.RAW | .DNG)
+	SUFFMT="TIF"
+	;;
+	
+	*)
+	SUFFMT="unknown"	#lowercase
+	echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_ERR008[x]})" 1>&2
+	let "id += 1"
+     	continue
+	;;
+    	esac
+
+    elif [ "$DO_RMEXIF" = "2" ]; then 	#ignore archive files
+	SUFFMT="archive"	#lowercase
+	echo -e "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_ERR005[x]})" 1>&2
+	let "id += 1"
+     	continue
+
+    else :
+    fi
+#
+# ignore files which exif already removed, by check filenames for specicl
+# string 'noexif', such as 'a.jpg.noexif.jpg'
+  if echo $BASENAME | grep ".$NOEXIF${LAST_SUFFIX}$" &>/dev/null; then
+     echo -e "$id * ${MSG_IGNORE[x]}: '$a'" 1>&2
+     let "id += 1"
+     continue
+  fi
+
+ elif [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+ elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link file
+	:
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+ elif [ -e "$a" ] && [ -L "$a" ]; then
+  #check symbolic link file
+	:
+#    echo -ne '\E[1;31m'
+#    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR011[x]})" 1>&2
+#    tput sgr0;
+#    echo
+#    let "id += 1"
+#    continue
+
+ elif [ -e "$a" ]; then
+	:
+ else 
+    echo
+    echo -e "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+  let "id += 1"
+  continue 
+fi
+ 
+## remove exif now
+## sample:
+## original filenames:
+#	IMG00001.JPG
+#	IMG00001.TIF
+#	IMG00001.RAW
+
+## save to new filenames after exif removed, by adding right suffix, and 
+#  never delete original files
+# 	IMG00001.JPG.noexif.jpg
+# 	IMG00001.JPG.noexif.TIF
+# 	IMG00001.JPG.noexif.RAW
+
+NEW_BASENAME="$BASENAME.$NOEXIF${LAST_SUFFIX}"
+echo -n "$id * ${MSG_SAVEAS[x]}: '$a' -> '$NEW_BASENAME' "
+convert -strip "$a" "$DIRNAME/$NEW_BASENAME"
+# echo
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK ";
+	tput sgr0;
+	echo "] "
+	
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "] "
+	    fi
+
+let "id += 1"
+done
+
+    
+  exit 0
+  	;;
+
+## ========================================
+# ver 1.5 added, last updated on 2014-03-30
+# option: 
+#	--remove-prefix | -rmp
+#	--replace-prefix | -rpp
+
+ -rmp | --remove-prefix | -rpp | --replace-prefix)
+# usage: 
+# $0 --remove-prefix OLD_PREFIX FILES
+# $0 --replace-prefix OLD_PREFIX NEW_PREFIX FILES
+
+## tips:
+# --replace-prefix "" PREFIX 001.jpg
+#   output: 001.jpg -> PREFIX001.jpg
+#	(equals: --prefix PREFIX 001.JPG)
+#
+# --replace-prefix PREFIX "" PREFIX002.jpg
+#   output: PREFIX002.jpg -> 002.jpg
+#	(equals: --remove-prefix PREFIX PREFIX002.JPG)
+#
+
+# steps:
+# 1* init id and get OPT;
+# 2* say what to do and check argument numbers enough or not;
+# 2.1* check and skip OLD_PREFIX and NEW_PREFIX included '/';
+# 3* do FOR loop: check each filename, and ignore directories, symbolic 
+#   files;
+# 3.1* get DIRNAME and BASENAME;
+# 3.2* ignore filenames which not include OLD_PREFIX;
+# 3.99* check exit status '$?'
+
+# tag rm1
+  id=1
+  OPT="$1"
+  
+# tag rm2
+  case "$OPT" in
+	-rmp | --remove-prefix)
+	  echo "${MSG_RM000[x]}"
+	  if [ "$#" -le 2 ]; then
+	    echo "  ${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_OLDPRE[x]} ${MSG_FILES[x]}"
+	    exit 0
+	  fi
+	  
+	  OLDPRE="$2"
+	  echo "  ${MSG_OLDPRE[x]}: '$OLDPRE'"
+
+  if echo "$OLDPRE" | grep -i "\/" &>/dev/null; then
+	echo "  ${MSG_ERR009[x]}" 1>&2
+	exit 0
+  fi
+  if [ "$OLDPRE" = "" ]; then
+	echo "  ${MSG_RD003[x]}" 1>&2
+	exit 0
+  fi
+	  echo
+	  shift 2
+	;;
+
+	-rpp | --replace-prefix)
+	  echo "${MSG_RP000[x]}"
+	  if [ "$#" -le 3 ]; then
+	    echo "  ${MSG_ERR001[x]}" 1>&2
+	    echo "${MSG_USAGE[x]}: `basename -- "$0"` $OPT ${MSG_OLDPRE[x]} ${MSG_NEWPRE[x]} ${MSG_FILES[x]}"
+	    exit 0
+
+	  fi
+	  OLDPRE="$2"
+	  NEWPRE="$3"
+
+	  echo "  ${MSG_OLDPRE[x]}: '$OLDPRE'"
+	  echo "  ${MSG_NEWPRE[x]}: '$NEWPRE'"
+
+  if echo "$OLDPRE" | grep "\/" &>/dev/null; then
+	echo "  ${MSG_ERR009[x]}" 1>&2
+	exit 0
+  fi
+	 
+  if echo "$NEWPRE" | grep "\/" &>/dev/null; then
+	echo "  ${MSG_ERR009[x]}" 1>&2
+	exit 0
+  fi
+
+	## if original and new prefixs are same strings, do nothing and exit
+  if [ "$OLDPRE" = "$NEWPRE" ]; then
+	echo "  ${MSG_RD003[x]}" 1>&2
+	exit 0
+  fi
+
+	  echo
+	  shift 3
+
+	;;
+	*)
+	echo "unknown error: ERROR_RM001" 1>&2
+	exit 1;;
+  esac
+
+	# tag rm-3
+
+	for a in "$@"; do
+  if [ -d "$a" ]; then
+    echo
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_IGNORE[x]}: '$a'\t(${MSG_IGNDIR[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+  elif [ -e "$a" ] && [ -L "$a" ]; then
+  #check symbolic link files
+   :
+
+  elif [ ! -e "$a" ] && [ -L "$a" ]; then
+  #check broken symbolic link files
+	:
+#    echo -ne '\E[1;31m'
+#    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR007[x]})" 1>&2
+#    tput sgr0;
+#    echo
+#    let "id += 1"
+#    continue
+
+  elif [ ! -e "$a" ]; then
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_ERROR[x]}: '$a'\t(${MSG_ERR002[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+
+
+  elif [ -e "$a" ]; then
+    :
+
+  else 
+    echo -ne '\E[1;31m'
+    echo -ne "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_ERR004[x]})" 1>&2
+    tput sgr0;
+    echo
+    let "id += 1"
+    continue
+  fi
+
+	# tag rm-3.1
+	DIRNAME=`dirname -- "$a"`
+	BASENAME=`basename -- "$a"`
+
+
+	# tag rm-3.2
+  if ! echo "$BASENAME" | grep "^$OLDPRE" &>/dev/null;then
+    echo -e "$id * ${MSG_IGNORE[x]}: '$a'" 1>&2
+    let "id += 1"
+    continue
+  fi
+
+  	case "$OPT" in
+	-rmp | --remove-prefix)
+	  NEW_BASENAME=`echo "$BASENAME" | sed "/^$OLDPRE/s///"`
+	;;
+	-rpp | --replace-prefix)
+	  NEW_BASENAME=`echo "$BASENAME" | sed "/^$OLDPRE/s//$NEWPRE/"`
+	;;
+	*)
+	echo "unknown error: ERROR_RM002" 1>&2
+	exit 1;;
+
+	esac
+
+	## if filename after prefix renamed is null and no letter left,
+	#  then cancel rename
+	  if [ "$NEW_BASENAME" = "" ];then
+	    echo -e "$id * ${MSG_SKIP[x]}: '$a'\t(${MSG_RD002[x]})" 1>&2
+	    let "id += 1"
+	    continue
+	  fi
+	  echo -n "$id * ${MSG_RENAME[x]}: '$a' -> '$NEW_BASENAME' "
+	  mv -i -- "$a" "$DIRNAME/$NEW_BASENAME"
+
+	# tag rm-3.99
+	    if [ "$?" = 0 ]; then
+	echo -ne "\t["
+	echo -ne '\E[1;32;40m'" OK ";
+	tput sgr0;
+	echo "] "
+	
+	    else
+	echo -ne "\t["
+	echo -ne '\E[1;31m'"FAIL";tput sgr0;
+	echo "] "
+	    fi
+
+  let "id += 1"
+  continue
+  done
+	;;
+
+	## ===================================
+  	--readme)
+	OPT="$1"
+	# check available README file
+	  if [ -r "$APPDIR/README.$CLANG" ]; then
+	    README="README.$CLANG"
+	  elif [ -r "$APPDIR/README" ]; then
+	    README="README"
+ 	 else  #default readme file
+	    README="README.zh_CN"
+ 	 fi
+
+	if [ -z "$DISPLAY" ]; then	#run in console mode
+	  ## show README in whiptail textbox
+	  ##	whiptail --textbox <file> <height> <width>
+	  whiptail --title "$APP $OPT" --textbox "$APPDIR/$README" 0 0
+
+	else	#run in GUI mode
+	  ## check 'zenity' if installed or executable
+	  if which zenity&> /dev/null; then
+	    HEIGHT="400"; WIDTH="600";
+	    zenity --text-info --title "$APP $OPT" --width="$WIDTH" --height="$HEIGHT" --filename="$APPDIR/$README" &
+	  else xdg-open "$APPDIR/$README" &
+	  fi
+	fi 
+	exit 0 ;;
+
+    -x | --extra)
+ 	  if "extraOption_$CLANG" 2>/dev/null &>/dev/null; then
+	    "extraOption_$CLANG"
+	  else extraOption
+	  fi
+	exit 0 ;;
+
+    -v | --version)
+	basename -- "$0 $VERSION"
+	exit 0 ;;
+
+    --): ;;
+
+    -*)
+	echo "Unrecognized option \`$option'" 1>&2
+	exit 1;;
+
+esac
+
+done
+exit 0 ;
